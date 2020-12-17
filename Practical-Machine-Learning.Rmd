@@ -1,0 +1,183 @@
+---
+title: "Practical Machine Learning"
+author: "Mohammad Sulaiman"
+date: "12/17/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Summary
+This document is the final report of the Practical Machine Learning course project. Coded in RStudio. Its knitr functions and published in the html and markdown format.
+
+# Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har
+
+#Data Source
+Training Data:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+Test Data:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+Data source:
+http://groupware.les.inf.puc-rio.br/har.
+
+
+```{r}
+library(lattice)
+library(ggplot2)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(corrplot)
+library(rattle)
+library(e1071)
+library(RColorBrewer)
+library(randomForest)
+
+set.seed(222)
+```
+
+
+
+```{r}
+url_train <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+url_quiz  <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+data_train <- read.csv(url(url_train), strip.white = TRUE, na.strings = c("NA",""))
+data_quiz  <- read.csv(url(url_quiz),  strip.white = TRUE, na.strings = c("NA",""))
+
+dim(data_train)
+```
+
+```{r}
+dim(data_quiz)
+```
+
+```{r}
+in_train  <- createDataPartition(data_train$classe, p=0.75, list=FALSE)
+train_set <- data_train[ in_train, ]
+test_set  <- data_train[-in_train, ]
+
+dim(train_set)
+```
+
+```{r}
+dim(test_set)
+```
+
+```{r}
+nzv_var <- nearZeroVar(train_set)
+
+train_set <- train_set[ , -nzv_var]
+test_set  <- test_set [ , -nzv_var]
+
+dim(train_set)
+```
+
+
+```{r}
+dim(test_set)
+```
+
+```{r}
+na_var <- sapply(train_set, function(x) mean(is.na(x))) > 0.95
+train_set <- train_set[ , na_var == FALSE]
+test_set  <- test_set [ , na_var == FALSE]
+
+dim(train_set)
+```
+
+
+```{r}
+dim(test_set)
+```
+
+
+```{r}
+train_set <- train_set[ , -(1:5)]
+test_set  <- test_set [ , -(1:5)]
+
+dim(train_set)
+```
+
+
+```{r}
+dim(test_set)
+```
+
+## Correlation Analysis
+
+```{r}
+corr_matrix <- cor(train_set[ , -54])
+corrplot(corr_matrix, order = "FPC", method = "circle", type = "lower",
+         tl.cex = 0.6, tl.col = rgb(0, 0, 0))
+```
+
+## Prediction Models
+
+Decision Tree Model
+
+```{r}
+set.seed(2222)
+fit_decision_tree <- rpart(classe ~ ., data = train_set, method="class")
+fancyRpartPlot(fit_decision_tree)
+```
+
+
+```{r}
+predict_decision_tree <- predict(fit_decision_tree, newdata = test_set, type="class")
+conf_matrix_decision_tree <- confusionMatrix(predict_decision_tree, factor(test_set$classe))
+conf_matrix_decision_tree
+```
+
+
+```{r}
+plot(conf_matrix_decision_tree$table, col = conf_matrix_decision_tree$byClass, 
+     main = paste("Decision Tree Model: Predictive Accuracy =",
+                  round(conf_matrix_decision_tree$overall['Accuracy'], 4)))
+```
+Generalized Boosted Model (GBM)
+
+```{r}
+set.seed(2222)
+ctrl_GBM <- trainControl(method = "repeatedcv", number = 5, repeats = 2)
+fit_GBM  <- train(classe ~ ., data = train_set, method = "gbm",
+                  trControl = ctrl_GBM, verbose = FALSE)
+fit_GBM$finalModel
+```
+
+
+```{r}
+predict_GBM <- predict(fit_GBM, newdata = test_set)
+conf_matrix_GBM <- confusionMatrix(predict_GBM, factor(test_set$classe))
+conf_matrix_GBM
+```
+
+# Random Forest Model
+
+```{r}
+set.seed(2222)
+ctrl_RF <- trainControl(method = "repeatedcv", number = 5, repeats = 2)
+fit_RF  <- train(classe ~ ., data = train_set, method = "rf",
+                  trControl = ctrl_RF, verbose = FALSE)
+fit_RF$finalModel
+```
+
+
+```{r}
+predict_RF <- predict(fit_RF, newdata = test_set)
+conf_matrix_RF <- confusionMatrix(predict_RF, factor(test_set$classe))
+conf_matrix_RF
+```
+
+# Applying the Best Predictive Model
+
+```{r}
+predict_quiz <- as.data.frame(predict(fit_RF, newdata = data_quiz))
+predict_quiz
+```
+
